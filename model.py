@@ -2,10 +2,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import config
+import inspect
 
 
 
-
+# 旋转位置编码
 class RoPE(nn.Module):
     def __init__(self,theta,d_k,max_seq_len):
         super().__init__()
@@ -38,6 +39,7 @@ class RMSnorm(nn.Module):
         y=x*rms
         y=y*self.gamma
         return y.to(input_type)
+
 
 class SwiGLU(nn.Module):
     def __init__(self,input_size,hidden_size):
@@ -91,7 +93,7 @@ class CausalAttention(nn.Module):
             attn_map=q@k.transpose(2,3)
             scale=k.size(-1)**-0.5
             attn_map=attn_map*scale
-            attn_map.masked_fill(self.mask[...,:T,:T]==0,float("-inf"))
+            attn_map=attn_map.masked_fill(self.mask[...,:T,:T]==0,float("-inf"))
             attn_map=F.softmax(attn_map,dim=-1)
             attn_map=self.dropout(attn_map)
             # shape:[B,nh,T,d]
@@ -105,7 +107,7 @@ class MLP(nn.Module):
     def __init__(self,hidden_size):
         super().__init__()
         self.ffn=nn.Sequential(
-            SwiGLU(hidden_size,int(hidden_size*8/3)),
+            SwiGLU(hidden_size,int(hidden_size*config.ffn_hidden_size_multiplier)),
             nn.Dropout(config.dropout)
         )
 
@@ -151,8 +153,9 @@ class MiniGPT(nn.Module):
           loss=None
         else:
           B,T,C=logits.shape
-          loss=F.cross_entropy(logits.reshape(B*T,C),label.reshape(B*T))
-
+          shifted_logits = logits[...,:-1,:].reshape(B * (T-1), C)
+          shifted_label = label[:,1:].reshape(B * (T-1))
+          loss = F.cross_entropy(shifted_logits, shifted_label)
         return logits,loss
             
 
@@ -168,9 +171,21 @@ class MiniGPT(nn.Module):
         return idx
 
 
+    def get_total_param_num(self):
+        return sum([p.numel() for p in self.parameters()])
 
-
-    
-
+    def configure_optimizer(self,weight_decay,learning_rate,betas):
+        param_dict={pn:p for pn,p in self.named_parameters() if p.requires_grad}
+        decay_params=[p for _,p in param_dict.items() if p.dim()>=2]
+        nondecay_params=[p for _,p in param_dict.items() if p.dim()<2]
+        optim_groups=[
+            {"params":decay_params,"weight_decay":weight_decay},
+            {"params":nondecay_params,"weight_decay":0.0}
+        ]
+        fused_available = 'fused' in inspect.signature(torch.optim.AdamW).parameters
+        use_fused = fused_available and config.device == 'cuda'
+        extra_args = dict(fused=True) if use_fused else dict()
+        optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas, **extra_args)
+        return optimizer
 
 
