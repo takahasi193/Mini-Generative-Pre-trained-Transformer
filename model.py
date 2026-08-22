@@ -155,7 +155,7 @@ class MiniGPT(nn.Module):
           B,T,C=logits.shape
           shifted_logits = logits[...,:-1,:].reshape(B * (T-1), C)
           shifted_label = label[:,1:].reshape(B * (T-1))
-          loss = F.cross_entropy(shifted_logits, shifted_label)
+          loss = F.cross_entropy(shifted_logits, shifted_label, ignore_index=-100)
         return logits,loss
             
 
