@@ -24,6 +24,7 @@ def tokenize_function(examples):
 
 tokenized_datasets = datasets.map(
     tokenize_function,
+    num_proc=4,
     batched=True,
     remove_columns=datasets['train'].column_names,
 )
