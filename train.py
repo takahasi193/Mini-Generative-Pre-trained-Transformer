@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader
 
 
 tokenizer=AutoTokenizer.from_pretrained(config.tokenizer_name)
+tokenizer.pad_token = tokenizer.eos_token
 datasets=load_dataset(config.dataset_name)
 
 def tokenize_function(examples):
