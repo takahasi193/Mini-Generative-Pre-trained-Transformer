@@ -30,6 +30,8 @@ tokenized_datasets = datasets.map(
 )
 train_data=tokenized_datasets['train']
 eval_data=tokenized_datasets['validation']
+train_data.set_format(type='torch', columns=['input_ids', 'attention_mask'])
+eval_data.set_format(type='torch', columns=['input_ids', 'attention_mask'])
 train_dataloader=DataLoader(train_data,batch_size=config.batch_size,shuffle=True)
 eval_dataloader=DataLoader(eval_data,batch_size=config.batch_size,shuffle=False)
 
